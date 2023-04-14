@@ -1,25 +1,17 @@
 #!/usr/bin/env python3
 
 import os
-import re
 import sys
 import json
 import yaml
 import yaxil
-import string
 import logging
-import requests
-import collections
 import argparse as ap
-from io import StringIO
-from yaml.representer import Representer
-from yaxil.exceptions import NoExperimentsError
+import xnattagger.io
 from xnattagger import Tagger
 
 logger = logging.getLogger(os.path.basename(__file__))
 logging.basicConfig(level=logging.INFO)
-
-yaml.add_representer(collections.defaultdict, Representer.represent_dict)
 
 def main():
     # Parse command line arguments
@@ -42,10 +34,12 @@ def main():
     parser.add_argument('session')  # Require session argument
     args = parser.parse_args()
 
-    with open(args.filters) as fo:
-        filters = yaml.load(fo, Loader=yaml.SafeLoader)
+    content = xnattagger.io.get(args.filters)
+    filters = yaml.load(content, Loader=yaml.SafeLoader)
 
-    tagger = Tagger(args.alias, filters, args.target, args.session)
+    auth = yaxil.auth(args.alias)
+
+    tagger = Tagger(auth, filters, args.target, args.session)
     tagger.generate_updates()
 
     if args.output_file:
