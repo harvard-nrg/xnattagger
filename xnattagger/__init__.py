@@ -78,17 +78,25 @@ class Tagger:
             logger.warning(f'{modality} not found in config file. continuing.')
             return None, None
         for scan in self.scans:
+            scanid = scan['id']
             image_type = scan.get('image_type', None)
             if isinstance(image_type, str):
                 scan['image_type'] = re.split('\\\+', scan['image_type'])
             for f in filt:
+                tag = f['tag']
+                logger.debug(f'trying to find match for {tag}')
                 match = True
-                for key, value in iter(f.items()):
-                    if key in scan and scan[key] != value:
+                for key, expected in iter(f.items()):
+                    if key == 'tag':
+                        continue
+                    actual = scan.get(key, None)
+                    if actual != expected:
                         match = False
+                    else:
+                        logger.debug(f'MATCH {actual} == {expected} for {scanid}')
                 if match:
                     matches.append(scan)
-                    tags.append(f['tag'])
+                    tags.append(tag)
         return matches, tags
 
     def t1w(self, scans):
