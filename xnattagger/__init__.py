@@ -3,8 +3,10 @@ import re
 import sys
 import json
 import yaxil
+import pydicom
 import logging
 import requests
+from io import BytesIO
 from pprint import pprint
 from yaxil.exceptions import NoExperimentsError
 
@@ -29,12 +31,12 @@ class Tagger:
                 'dwi_AP': self.dwi_AP(self.scans), # Generate updates for AP fieldmap(s)
                 'revpol': self.revpol(self.scans) # Generate updates for revpol scans
             })
-        if 't1' in self.target:
+        if 't1w' in self.target:
             self.updates.update({
                 't1w': self.t1w(self.scans),  # Generate updates for T1w scan(s)
                 't1w_move': self.t1w_move(self.scans)  # Generate updates for T1w_MOVE scan(s)
             })
-        if 't2' in self.target:
+        if 't2w' in self.target:
             self.updates.update({
                 't2w': self.t2w(self.scans),  # Generate updates for T2w scan(s)
                 't2w_move': self.t2w_move(self.scans)  # Generate updates for T2w_MOVE scan(s)
@@ -79,9 +81,6 @@ class Tagger:
             return None, None
         for scan in self.scans:
             scanid = scan['id']
-            image_type = scan.get('image_type', None)
-            if isinstance(image_type, str):
-                scan['image_type'] = re.split('\\\+', scan['image_type'])
             for f in filt:
                 tag = f['tag']
                 logger.debug(f'trying to find match for {tag}')
@@ -474,14 +473,69 @@ class Tagger:
         self.scans = None
         if not os.path.exists(cachefile):
             logger.info(f'cache miss {cachefile}')
-            self.scans = list(yaxil.scans(self.auth, label=self.session))
+            self.scans = self.query_scans()
             if self.cache:
+                logger.info(f'saving {cachefile}')
                 with open(cachefile, 'w') as fo:
                     fo.write(json.dumps(self.scans, indent=2))
         else:
             logger.info(f'cache hit {cachefile}')
             with open(cachefile) as fo:
                 self.scans = json.loads(fo.read())
+
+    def query_scans(self):
+        result = list()
+        scans = list(yaxil.scans(self.auth, label=self.session))
+        for scan in scans:
+            # turn image type back into a proper list
+            image_type = scan.get('image_type', None)
+            if isinstance(image_type, str) and image_type:
+                scan['image_type'] = re.split(r'\\+', image_type)
+            # pull out secondary image type from an actual dicom file
+            sec_image_type = self.secondary_image_type(scan)
+            scan['secondary_image_type'] = sec_image_type
+        return scans
+
+    def secondary_image_type(self, scan):
+        # requestr a single dicom file from this scan
+        ds = self.get_example_file(scan)
+        # search for secondary image type
+        try:
+            item = ds[(0x5200,0x9230)][0]
+            item = item[(0x0021,0x11fe)][0]
+            item = item[(0x0021,0x1175)]
+        except KeyError:
+            return list()
+        return list(item.value)
+
+    def get_example_file(self, scan):
+        baseurl = self.auth.url.rstrip('/')
+        project = scan['session_project']
+        subject = scan['subject_label']
+        session = scan['session_label']
+        scanid = scan['id']
+        url = f'{baseurl}/data/projects/{project}/subjects/{subject}/experiments/{session}/scans/{scanid}/files'
+        r = requests.get(
+            url,
+            auth=yaxil.basicauth(self.auth),
+            cookies=self.auth.cookie
+        )
+        if r.status_code != requests.codes.ok:
+            raise RequestError(f'response not ok ({r.status_code}) from {r.url}')
+        js = r.json()
+        path = js['ResultSet']['Result'][0]['URI'].lstrip('/')
+        r = requests.get(
+            f'{baseurl}/{path}',
+            auth=yaxil.basicauth(self.auth),
+            cookies=self.auth.cookie
+        )
+        if r.status_code != requests.codes.ok:
+            raise RequestError(f'response not ok ({r.status_code}) from {r.url}')
+        ds = pydicom.dcmread(BytesIO(r.content))
+        return ds
+
+class RequestError(Exception):
+    pass
 
 class BadArgumentError(Exception):
     pass

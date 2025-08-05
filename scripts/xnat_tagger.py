@@ -27,28 +27,34 @@ def main():
     # Parse command line arguments
     parser = ap.ArgumentParser()
     parser.add_argument('--xnat-alias', required=True,
-        help='XNAT alias')  # Set default value and provide help text for alias argument
+        help='XNAT alias')
     parser.add_argument('--project',
-        help='XNAT project')  # Provide help text for project argument
+        help='XNAT project')
     parser.add_argument('-c', '--cache', action='store_true',
-        help='Speed up development by caching yaxil.scans output')  # Provide help text for cache argument
+        help='Speed up development by caching yaxil.scans output')
     parser.add_argument('-o', '--output-file',
-        help='Output summary of updates')  # Provide help text for output-file argument
+        help='Output summary of updates')
     parser.add_argument('--dry-run', action='store_true',
-        help='Do not execute updates')  # Provide help text for dry-run argument
+        help='Do not execute updates')
     parser.add_argument('--confirm', action='store_true',
-        help='Prompt user to confirm every update')  # Provide help text for confirm argument
+        help='Prompt user to confirm every update')
     parser.add_argument('--config', required=True,
         help='Filters configuration file') 
-    parser.add_argument('--target-modality', nargs='+', required=True, type=str.lower) # Require --target argument
+    parser.add_argument('--target-modality', nargs='+', required=True, type=str.lower)
     parser.add_argument('--label', required=True,
-        help='Label of XNAT MR Session')  # Require label argument
+        help='Label of XNAT MR Session')
     args = parser.parse_args()
 
     with open(args.config) as fo:
-        configs = yaml.load(fo, Loader=yaml.SafeLoader)
+        configs = yaml.load(fo, Loader=yaml.SafeLoader)['xnat-tagger']
 
-    tagger = Tagger(args.xnat_alias, configs, args.target_modality, args.label)
+    tagger = Tagger(
+        args.xnat_alias,
+        configs,
+        args.target_modality,
+        args.label,
+        cache=args.cache
+    )
     tagger.generate_updates()
 
     if args.output_file:
