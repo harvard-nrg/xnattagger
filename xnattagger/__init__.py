@@ -501,12 +501,22 @@ class Tagger:
         ds = self.get_example_file(scan)
         # search for secondary image type
         try:
-            item = ds[(0x5200,0x9230)][0]
+            item = ds.PerFrameFunctionalGroupsSequence[0]
             item = item[(0x0021,0x11fe)][0]
             item = item[(0x0021,0x1175)]
+            return list(item.value)
         except KeyError:
-            return list()
-        return list(item.value)
+            pass
+
+        try:
+            item = ds.PerFrameFunctionalGroupsSequence[0]
+            item = item[(0x0021,0x10fe)][0]
+            item = item[(0x0021,0x1075)]
+            return list(item.value)
+        except KeyError:
+            pass
+
+        return list()
 
     def get_example_file(self, scan):
         baseurl = self.auth.url.rstrip('/')
