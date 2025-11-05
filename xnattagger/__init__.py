@@ -497,8 +497,13 @@ class Tagger:
         return scans
 
     def secondary_image_type(self, scan):
-        # requestr a single dicom file from this scan
+        # request a single dicom file from this scan
         ds = self.get_example_file(scan)
+
+        # only enhanced dicom files have this attribute
+        if not hasattr(ds, 'PerFrameFunctionalGroupsSequence'):
+            return list()
+
         # search for secondary image type
         try:
             item = ds.PerFrameFunctionalGroupsSequence[0]
@@ -507,7 +512,7 @@ class Tagger:
             return list(item.value)
         except KeyError:
             pass
-
+        
         try:
             item = ds.PerFrameFunctionalGroupsSequence[0]
             item = item[(0x0021,0x10fe)][0]
