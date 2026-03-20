@@ -3,6 +3,7 @@
 import os
 import re
 import sys
+import pdb
 import json
 import yaml
 import yaxil
@@ -12,10 +13,10 @@ import requests
 import collections
 import argparse as ap
 from io import StringIO
+from xnattagger import Tagger
+import xnattagger.config as config
 from yaml.representer import Representer
 from yaxil.exceptions import NoExperimentsError
-from xnattagger import Tagger
-import xnattagger.config as config 
 
 logger = logging.getLogger(os.path.basename(__file__))
 logging.basicConfig(level=logging.INFO)
@@ -28,6 +29,12 @@ def main():
     parser = ap.ArgumentParser()
     parser.add_argument('--xnat-alias', required=True,
         help='XNAT alias')
+    parser.add_argument('--label', required=True,
+        help='Label of XNAT MR Session')
+    parser.add_argument('--config', required=True,
+        help='Filters configuration file')
+    parser.add_argument('--target-modality', nargs='+', required=True, type=str.lower)
+    parser.add_argument('--append-tag-digits', type=str, default=True)
     parser.add_argument('--project',
         help='XNAT project')
     parser.add_argument('-c', '--cache', action='store_true',
@@ -38,21 +45,19 @@ def main():
         help='Do not execute updates')
     parser.add_argument('--confirm', action='store_true',
         help='Prompt user to confirm every update')
-    parser.add_argument('--config', required=True,
-        help='Filters configuration file') 
-    parser.add_argument('--target-modality', nargs='+', required=True, type=str.lower)
-    parser.add_argument('--label', required=True,
-        help='Label of XNAT MR Session')
     args = parser.parse_args()
 
     with open(args.config) as fo:
         configs = yaml.load(fo, Loader=yaml.SafeLoader)['xnat-tagger']
+
+    append_tag_digits = args.append_tag_digits == 'True'
 
     tagger = Tagger(
         args.xnat_alias,
         configs,
         args.target_modality,
         args.label,
+        append_tag_digits,
         cache=args.cache
     )
     tagger.generate_updates()
