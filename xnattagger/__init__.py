@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import pdb
 import json
 import yaxil
 import pydicom
@@ -13,13 +14,14 @@ from yaxil.exceptions import NoExperimentsError
 logger = logging.getLogger()
 
 class Tagger:
-    def __init__(self, alias, config, target, session, project=None, cache=None):
+    def __init__(self, alias, config, target, session, append_tag_digits, project=None, cache=None):
         self.auth = yaxil.auth(alias)
         self.config = config
         self.project = project
         self.cache = cache
         self.target = target 
         self.session = session
+        self.append_tag_digits = append_tag_digits
         self.updates = dict()
 
     def generate_updates(self):
@@ -109,18 +111,20 @@ class Tagger:
             session = scan['session_label']
             series = scan['series_description'].strip()
             note = scan['note'].strip()
-            #tag = f'{tag}_{i:03}'
             tag_prefix = tags[tag_counter]
             match = re.search(r'\d+$', tag_prefix) ### check if the tag ends in digits. If it does don't mess with it
             if not match:
-                tag = tag_prefix + f'_{i:03}'
+                if not self.append_tag_digits and len(scans) < 2:
+                    tag = tag_prefix
+                else:
+                    tag = tag_prefix + f'_{i:03}'
             else:
                 tag = tag_prefix
             tag_counter += 1
             updates.append({
                 'project': scan['session_project'],
                 'subject': scan['subject_label'],
-                'session': session, 
+                'session': session,
                 'scan': sid,
                 'series_description': series,
                 'note': note,
@@ -472,7 +476,7 @@ class Tagger:
         cachefile = f'{self.session}.json'
         self.scans = None
         if not os.path.exists(cachefile):
-            logger.info(f'cache miss {cachefile}')
+            logger.debug(f'{cachefile}')
             self.scans = self.query_scans()
             if self.cache:
                 logger.info(f'saving {cachefile}')
@@ -486,6 +490,7 @@ class Tagger:
     def query_scans(self):
         result = list()
         scans = list(yaxil.scans(self.auth, label=self.session))
+        logger.info('querying scans...')
         for scan in scans:
             # turn image type back into a proper list
             image_type = scan.get('image_type', None)
